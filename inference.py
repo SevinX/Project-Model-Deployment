@@ -3,13 +3,29 @@ inference.py
 =============
 Kode inferencing untuk model Credit_Score yang sudah di-deploy.
 
+STRUKTUR FOLDER YANG DIASUMSIKAN (flat, cocok untuk Streamlit Community Cloud):
+    repo-root/
+    ├── app.py
+    ├── inference.py            <- file ini
+    ├── test_cases.py
+    ├── requirements.txt
+    ├── model/
+    │   ├── best_model.pkl
+    │   ├── label_encoder.pkl
+    │   └── model_meta.pkl
+    └── credit_score_pipeline/  <- package (folder ini, WAJIB ikut di-upload)
+        ├── __init__.py
+        ├── preprocessing.py
+        └── ...
+
 Dependency penting: `best_model.pkl` adalah sklearn Pipeline yang berisi
 custom transformer class (RawDataCleaner, StatisticalOutlierClipper,
 FallbackImputer, FeatureEngineer) yang didefinisikan di package
-`credit_score_pipeline.preprocessing` (lihat ../src/). Python's pickle
-mengingat class lewat *nama modul asalnya* -- jadi package itu WAJIB bisa
-di-import persis di path yang sama saat unpickle. Baris `sys.path.insert(...)`
-di bawah ini menangani itu; JANGAN dihapus atau dipindah tanpa menyesuaikan.
+`credit_score_pipeline.preprocessing`. Python's pickle mengingat class lewat
+*nama modul asalnya* -- jadi folder `credit_score_pipeline/` di atas WAJIB
+ada persis sebagai sibling file ini (bukan di dalam subfolder lain, bukan
+"src/credit_score_pipeline"), supaya `import credit_score_pipeline.preprocessing`
+resolve ke tempat yang sama seperti saat model di-pickle.
 
 Input yang diterima adalah data MENTAH (raw) -- persis format kolom di
 data_A.csv asli (tanpa kolom identitas/target) -- karena seluruh cleaning,
@@ -27,13 +43,20 @@ from typing import Any, Dict, List, Union
 import numpy as np
 import pandas as pd
 
-# --- Pastikan package credit_score_pipeline (berisi class custom transformer
-#     yang dipakai saat pickling) bisa di-import, tidak peduli dari mana
-#     inference.py dijalankan. ---
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent
-_SRC_PATH = _PROJECT_ROOT / "src"
-if str(_SRC_PATH) not in sys.path:
-    sys.path.insert(0, str(_SRC_PATH))
+# --- Pastikan package credit_score_pipeline (folder sibling file ini) bisa
+#     di-import, apa pun current working directory saat Streamlit dijalankan. ---
+_THIS_DIR = Path(__file__).resolve().parent
+if str(_THIS_DIR) not in sys.path:
+    sys.path.insert(0, str(_THIS_DIR))
+
+if not (_THIS_DIR / "credit_score_pipeline").exists():
+    raise ModuleNotFoundError(
+        f"Folder 'credit_score_pipeline/' tidak ditemukan di '{_THIS_DIR}'. "
+        f"Folder package ini WAJIB di-upload persis sebagai sibling inference.py "
+        f"(lihat docstring di atas file ini) -- bukan di dalam 'src/', bukan di "
+        f"folder lain. Salin folder 'credit_score_pipeline/src/credit_score_pipeline/' "
+        f"dari project pipeline (bagian 2) ke sini, pertahankan namanya."
+    )
 
 # Import ini WAJIB ada sebelum pickle.load() di bawah, walau terlihat tidak
 # dipakai langsung -- supaya class-nya terdaftar di sys.modules sebelum
